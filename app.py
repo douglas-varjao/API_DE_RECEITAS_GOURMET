@@ -1,7 +1,56 @@
 #app
 from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager
+from flasgger import Swagger
 
+#importo config:
+
+from config import Config
+
+#cria instancia da aplicação flask e configura com o config
 app = Flask(__name__)
+app.config.from_object(Config)
+
+#inicia as extensões
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
+swagger = Swagger(app)
+
+#----- BANCO DE DADOS ----
+
+class User(db.Model):
+    """ 
+    Modelo de dados para a tabela de usuario.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(120), unique=True, nullable=False)
+    #Relação das receitas: um usuario pode ter muitas receitas
+    recipes = db.relationship('Recipe', beckref='author', lazy=True)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+class Recipe(db.Model):
+    """
+    Modelo de dados para a tabela de receitas
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False) 
+    description = db.Column(db.Text, nullable=False)
+    ingredients = db.Column(db.Text, nullable=False)
+    instructions = db.Column(db.Text, nullable=False)
+    #relação do usuario com a receita por ID
+    user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Recipe {self.title}>'
+    
+#-----------Rotas----------------------------
+
 
 @app.route('/')
 def home():
