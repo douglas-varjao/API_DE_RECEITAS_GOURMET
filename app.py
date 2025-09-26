@@ -163,25 +163,171 @@ def login():
 #rota para obter todas as receitas:
 @app.route('/recipes', methods=['GET'])
 def get_recipes():
-    #logica
-    return({"message":"rota em desenvolvimento"})
+    """
+    Obtém todas as receitas.
+    ---
+    tags:
+      - Receitas
+    responses:
+      200:
+        description: Retorna um lista de todas as receitas.
+        schema:
+          type: array
+          items:
+            properties:
+              id:
+                type: integer
+              title:
+                type: string
+              description:
+                type: string
+              ingredients:
+                type: string
+              instructions:
+                type: string
+              user_id:
+                type: integer
+    """
+    recipes = Recipe.query.all()
+    output = []
+    for recipe in recipes:
+        recipe_data = {}
+        recipe_data['id'] = recipe.id
+        recipe_data['title'] = recipe.title
+        recipe_data['description'] = recipe.description
+        recipe_data['ingredients'] = recipe.ingredients
+        recipe_data['instructions'] = recipe.instructions
+        recipe_data['user_id'] = recipe.user_id
+        output.append(recipe_data)
+
+    return jsonify({"recipes": output})
 
 #rota para adicionar nova receita:
 @app.route('/recipes', methods=['POST'])
 def post_recipes():
-    #logica
-    return ({"message":"rota em desenvolvimento"})
+    """
+    Adiciona uma nova receita
+    ---
+    tags:
+      - Receiras
+    security:
+      - JWT: []
+    parameters:
+      - name: body
+        in: body 
+        required: true
+        schema:
+          id: NewRecipe
+          required:
+            - title
+            - description
+            - instruction
+          properties:
+            title:
+              type: string
+              description: Titulo da receita.
+            description:
+              type: string
+              description: Descrição da receita.
+            ingredients:
+              type: string
+            instructions:
+              type: string
+              description: Instruções de preparo.
+    responses:
+      201:
+        description: Receira criada com sucesso.
+      401:
+        description: Token JWT ausente ou invalido.
+      400:
+        description: Dados ausentes no corpo da requisição.
+    """
+    data = request.get_json()
+    #pega o ID do usuario apartir do token JWT
+    current_user_id = get_jwt_identity()
+
+    if not data or not data.get('title') or not data.get('description') or not data.get('ingredients') or not data.get('instructions'):
+      return jsonify({"message":"Dadis incompletos para a receita"}), 400
+    new_recipe = Recipe(
+        title=data['title'],
+        description=data['description'],
+        ingredients=data['ingredients'],
+        instructions=data['instructions']
+        user_id=current_user_id
+    )
+    db.session.add(new_recipe)
+    db.session.commit()
+    return jsonify({"message":"Receita adicionada com sucesso!", "recipe_id":new_recipe.id}), 201
+
 
 #rota para receber a receita por ID:
 @app.route('/recipes/<int:recipe_id>', methods=['GET'])
 def get_recipe(recipe_id):
-    #logica
-    return({"message": f"{recipe_id} em desenvolvimento"})
+    """
+    Obtem uma receita especifica pelo ID.
+    ---
+    tags:
+      - name: recipe_id
+        in: path
+        type: integer
+        required: true
+        description: ID da receita.
+    responses:
+      200:
+        description: Retorna os detalhes da receita.
+      400:
+        description: Receirta não encontrada.
+    """
+    recipe = Recipe.query.get_or_404(recipe_id)
+    return jsonify ({
+        "id": recipe_id,
+        "tile": recipe.title,
+        "description": recipe.description,
+        "ingredients": recipe.ingredients,
+        "instructions": recipe.instructions,
+        "user_id": recipe.user_id
+    })
 
 #rota para atualizar um receita existente:
 @app.route('/recipes/<int:recipe_id>', methods=['PUT'])
 def update_recipe(recipe_id):
-    #logica
+    """
+    Atualiza uma receita existente.
+    ---
+    tags:
+      - Receitas
+    security:
+      - JWT: []
+    parameters:
+      - name: recipe_id
+        in: path
+        type: integer
+        required: true
+        description: ID da receita a ser atualizada.
+      - name: body
+        in: body
+        required: true
+        schema:
+          id: UpdateRecipe
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            ingredients:
+              type: string
+            instructions:
+              type: string
+    responses:
+      200:
+        description: Receita atualizada com sucesso.
+      401:
+        description: Token JWT ausente ou inválido.
+      403:
+        description: Você não tem permissão para atualizar esta receita.
+      404:
+        description: Receita não encontrada.
+    """
     return({"message":f"a receita {recipe_id} foi atualizada com sucesso (em desenvolvimento)"})
 
 @app.route('/recipes/<int:recipe_id>', methods=['DELETE'])
