@@ -329,12 +329,51 @@ def update_recipe(recipe_id):
       404:
         description: Receita não encontrada.
     """
-    return({"message":f"a receita {recipe_id} foi atualizada com sucesso (em desenvolvimento)"})
+    current_user_id= get_jwt_identity()
+    recipe = Recipe.query.get_or_404(recipe_id)
+
+    if recipe.user_id != current_user_id:
+      return jsonify({"message": "Voce não tem permissão para atualizar essa receita"}), 403
+    
+    data = request.get_json()
+    if data:
+          recipe.title= data.get('title', recipe.title)
+          recipe.description= data.get('description', recipe.description)
+          recipe.ingredients= data.get('ingredients', recipe.ingredients)
+          recipe.instructions= data.get('instructions', recipe.instructions)
+          db.session.commit()
+          return jsonify({"message": f"A receita {recipe_id} foi atualizada com sucesso"})
+    return jsonify ({"message": "Nenhum dado fornecido para atualização"}), 400
 
 @app.route('/recipes/<int:recipe_id>', methods=['DELETE'])
 def delete_recipe(recipe_id):
-    #logica
-    return ({"message": f"a receita {recipe_id} foi deletada (em desenvolvimento)"})
+    """
+    Deleta uma receita existente (por id).
+    ---
+    tags:
+      - Receitas
+    security:
+      - JWT: []
+    parameters:
+      - name: recipe_id
+        in: path
+        type: integer
+        required: type
+        required: true
+        description: ID da receita a ser deletada.
+    responses:
+      200:
+        description: Receita deletada com sucesso.
+      401:
+        description: Você não tem permissão para deletar esta receita.
+      404: 
+        description: Receita não encontrada.
+    """
+    corrent_user_id= get_jwt_identity()
+    recipe = Recipe.query.get_or_404(recipe_id)
+
+    if recipe.user_id != get_jwt_identity():
+      return jsonify({"message": f"a receita {recipe_id} foi deletada com sucesso"})
 #-------------------------------------------------------------------------------------------
 
 @app.cli.command("creat-db")
