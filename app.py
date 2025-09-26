@@ -248,11 +248,12 @@ def post_recipes():
 
     if not data or not data.get('title') or not data.get('description') or not data.get('ingredients') or not data.get('instructions'):
       return jsonify({"message":"Dadis incompletos para a receita"}), 400
+    
     new_recipe = Recipe(
         title=data['title'],
         description=data['description'],
         ingredients=data['ingredients'],
-        instructions=data['instructions']
+        instructions=data['instructions'],
         user_id=current_user_id
     )
     db.session.add(new_recipe)
