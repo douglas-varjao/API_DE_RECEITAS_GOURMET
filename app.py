@@ -22,13 +22,14 @@ swagger = Swagger(app)
 #----- BANCO DE DADOS ----
 
 class User(db.Model):
-    """ 
-    Modelo de dados para a tabela de usuario.
     """
+    Modelo de dados para a tabela de usuários.
+    """
+    __tablename__ = 'users'  # <--- CORREÇÃO: Nome da tabela definido explicitamente
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), unique=True, nullable=False)
-    #Relação das receitas: um usuario pode ter muitas receitas
+    password = db.Column(db.String(120), nullable=False)
+    # Relação com receitas: um usuário pode ter muitas receitas
     recipes = db.relationship('Recipe', backref='author', lazy=True)
 
     def __repr__(self):
@@ -36,15 +37,17 @@ class User(db.Model):
 
 class Recipe(db.Model):
     """
-    Modelo de dados para a tabela de receitas
+    Modelo de dados para a tabela de receitas.
     """
+    __tablename__ = 'recipes'  # <--- CORREÇÃO: Nome da tabela definido explicitamente
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False) 
+    title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     ingredients = db.Column(db.Text, nullable=False)
     instructions = db.Column(db.Text, nullable=False)
-    #relação do usuario com a receita por ID
-    user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
+    # Relação com usuário: uma receita pertence a um usuário
+    # <--- CORREÇÃO: Referenciando a tabela 'users'
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     def __repr__(self):
         return f'<Recipe {self.title}>'
@@ -60,7 +63,7 @@ def home():
 #--ROTAS USUARIOS--
 
 #rota para registrar um novo usuario
-@app.route('/users/registers', methods=['POST'])
+@app.route('/users/register', methods=['POST'])
 def register():
     """
     Endpoint para registro de novo usuário.
@@ -94,18 +97,19 @@ def register():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({"message": "Nome de usuario e senha são obrigatórios"}), 400
-    
+        return jsonify({"message": "Nome de usuário e senha são obrigatórios"}), 400
+
+    # User.query é a linha que estava dando o erro de configuração
     if User.query.filter_by(username=username).first():
-            return jsonify({"message": "Nome de usuario ja existe"}), 400
-    
+        return jsonify({"message": "Nome de usuário já existe"}), 400
+
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
     new_user = User(username=username, password=hashed_password)
 
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({"message": "Usuario registrado com sucesso" }), 201
+    return jsonify({"message": "Usuário registrado com sucesso"}), 201
 
 
 #rota para fazer login de um usuario 
@@ -145,14 +149,14 @@ def login():
     """
 
     data = request.get_json()
-    usename = data.get('username')
+    username = data.get('username')
     password = data.get('password')
 
-    user = User.query.filter_by(usename=usename).first()
+    user = User.query.filter_by(username=username).first()
 
     if user and bcrypt.check_password_hash(user.password, password):
         #a identidade do token sera o id de usuario
-        access_token= create_access_token(identity=user.id)
+        access_token= create_access_token(identity=str(user.id))
         return jsonify(access_token=access_token), 200
     else:
         return jsonify({"message":"Nome de usuario ou senha incorretos"}), 401
@@ -204,51 +208,61 @@ def get_recipes():
 
 #rota para adicionar nova receita:
 @app.route('/recipes', methods=['POST'])
-def post_recipes():
+@jwt_required()
+def add_recipe():
     """
-    Adiciona uma nova receita
+    Adiciona uma nova receita.
     ---
     tags:
-      - Receiras
+      - Receitas
     security:
       - JWT: []
     parameters:
       - name: body
-        in: body 
+        in: body
         required: true
         schema:
           id: NewRecipe
           required:
             - title
             - description
-            - instruction
+            - ingredients
+            - instructions
           properties:
             title:
               type: string
-              description: Titulo da receita.
+              description: Título da receita.
             description:
               type: string
               description: Descrição da receita.
             ingredients:
               type: string
+              description: Ingredientes da receita.
             instructions:
               type: string
               description: Instruções de preparo.
     responses:
       201:
-        description: Receira criada com sucesso.
+        description: Receita criada com sucesso.
       401:
-        description: Token JWT ausente ou invalido.
+        description: Token JWT ausente ou inválido.
       400:
         description: Dados ausentes no corpo da requisição.
     """
-    data = request.get_json()
-    #pega o ID do usuario apartir do token JWT
+    try:
+        # Tenta obter o JSON, se falhar, data será None ou a exceção será capturada
+        data = request.get_json()
+    except Exception as e:
+        # Se houver um erro de JSON malformado, retorne um erro 400
+        return jsonify({"message": f"Erro na decodificação do JSON: {e}"}), 400
+
+    # Pega o ID do usuário a partir do token JWT
+    # Esta linha só é executada se o @jwt_required() acima for bem-sucedido
     current_user_id = get_jwt_identity()
 
     if not data or not data.get('title') or not data.get('description') or not data.get('ingredients') or not data.get('instructions'):
-      return jsonify({"message":"Dadis incompletos para a receita"}), 400
-    
+        return jsonify({"message": "Dados incompletos para a receita"}), 400
+
     new_recipe = Recipe(
         title=data['title'],
         description=data['description'],
@@ -256,9 +270,11 @@ def post_recipes():
         instructions=data['instructions'],
         user_id=current_user_id
     )
+
     db.session.add(new_recipe)
     db.session.commit()
-    return jsonify({"message":"Receita adicionada com sucesso!", "recipe_id":new_recipe.id}), 201
+    return jsonify({"message": "Receita adicionada com sucesso!", "recipe_id": new_recipe.id}), 201
+
 
 
 #rota para receber a receita por ID:
@@ -376,12 +392,19 @@ def delete_recipe(recipe_id):
       return jsonify({"message": f"a receita {recipe_id} foi deletada com sucesso"})
 #-------------------------------------------------------------------------------------------
 
-@app.cli.command("creat-db")
+@app.cli.command("create-db")
 def create_db():
-    """ Cria as tabelas do banco de dados a partir dos modelos."""
+    """Cria as tabelas do banco de dados a partir dos modelos."""
     with app.app_context():
         db.create_all()
-        print("Banco de dados e tabelas criados com sucesso")
+        print("Banco de dados e tabelas criados com sucesso!")
 
+# Executa o servidor Flask
 if __name__ == "__main__":
+    # SOLUÇÃO DEFINITIVA: Força a criação das tabelas se elas não existirem
+    # no momento de iniciar o servidor, eliminando erros de ambiente (FLASK_APP).
+    with app.app_context():
+        db.create_all()
+        print("Verificação do Banco de Dados concluída (tabelas criadas se ausentes).")
+        
     app.run(debug=True)
